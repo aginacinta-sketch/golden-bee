@@ -1,0 +1,70 @@
+# ============================================================
+# .gitignore — Website Katalog Supplier B2B
+# Prinsip: yang masuk repo HANYA kode & konfigurasi.
+# Data (SQLite) & rahasia (.env) dikirim terpisah — lihat
+# PANDUAN-HOSTING.md bagian "Migrasi database".
+# ============================================================
+
+# Dependensi & hasil build
+node_modules/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# Rahasia & environment (template .env.example TETAP di-track)
+.env
+.env.*
+!.env.example
+# Kredensial GitHub (token PAT) untuk sinkronisasi otomatis — JANGAN pernah ikut git
+.git-kredensial
+
+# Database SQLite — db/custom.db SENGAJA DI-TRACK sejak insiden 9 Okt:
+# workspace sandbox pernah dibuat ulang platform dan SEMUA berkas di luar
+# git hilang (data katalog ikut lenyap). Dengan men-track database, auto-
+# commit platform menjadi cadangan data. Berkas sampingan WAL tetap diabaikan.
+db/*.db-shm
+db/*.db-wal
+db/*.db.backup-*
+db/*.kosong-*
+
+# Log, pid, artefak sesi kerja
+*.log
+*.pid
+.watchdog.pid
+worklog.md
+agent-ctx/
+tool-results/
+upload/
+download/
+
+# Arsip unduhan tidak perlu di-track
+public/*.zip
+*.zip
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.pem
+.idea/
+.vscode/
+
+# Vercel / vercel
+.vercel
+
+# Platform sandbox — .zscripts SENGAJA DI-TRACK sejak 11 Okt: insiden 9 Okt
+# (workspace dibangun ulang & semua berkas non-git hilang) membuktikan skrip
+# ini dibutuhkan agar situs bisa berjalan lagi setelah pemulihan dari git.
+# Cadangan (GitHub) harus lengkap. Konfigurasi lokal platform tetap diabaikan.
+.claude
+.z-ai-config
+local-*
+/skills/
+next-env.d.ts
+
+# Testing & debug
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*

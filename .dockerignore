@@ -1,0 +1,33 @@
+# Bergantungan & hasil build (dibangun ulang di dalam image)
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+
+# Database: data produksi JANGAN dibake ke image — dikirim via volume
+# (lihat PANDUAN-HOSTING.md bagian "Migrasi data")
+db
+**/db
+
+# Rahasia & berkas lingkungan sandbox
+.env
+.dev.vars
+
+# Log, pid, artefak sesi kerja
+*.log
+*.pid
+.watchdog.pid
+worklog.md
+agent-ctx
+upload
+
+# Arsip unduhan kode (tidak perlu ikut ke image)
+public/*.zip
+
+# Skrip khusus platform sandbox
+.zscripts
+
+# Git
+.git
+.gitignore

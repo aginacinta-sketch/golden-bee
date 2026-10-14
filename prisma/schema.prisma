@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  // URL diambil dari env DATABASE_URL — WAJIB tersedia di semua lingkungan:
+  //  1) Dev sandbox: file .env di root proyek (DATABASE_URL=file:/home/z/my-project/db/custom.db)
+  //  2) Standalone sandbox (preview publish): build script menyalin .env ke .next/standalone/
+  //  3) DEPLOY PRODUKSI PLATFORM: .zscripts/start.sh mengekspor
+  //     DATABASE_URL=file:/app/db/custom.db (database hasil bawaan deploy).
+  //     JANGAN mengganti ini dengan path absolut — path baked sandbox tidak
+  //     ada di server produksi → semua query gagal → website blank/memuat
+  //     selamanya (kasus Task 68).
+  url      = env("DATABASE_URL")
+}
+
+// Pengaturan situs (key-value) — tampilan, branding, kontak, dsb.
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
+
+// Produk katalog supplier
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  category    String   @default("")
+  description String   @default("")
+  // JSON array of strings (poin fitur / bullet)
+  features    String   @default("[]")
+  // JSON array of URL gambar
+  images      String   @default("[]")
+  // URL video produk (opsional)
+  video       String   @default("")
+  unit        String   @default("")
+  minOrder    String   @default("")
+  // Estimasi harga (opsional) untuk kartu produk & dialog permintaan penawaran
+  priceMin    Float?
+  priceMax    Float?
+  featured    Boolean  @default(false)
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Item menu navigasi website
+model MenuItem {
+  id        String   @id @default(cuid())
+  label     String
+  target    String   @default("#produk")
+  icon      String   @default("")
+  visible   Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Media (gambar / video) yang diunggah admin, disimpan base64
+model Media {
+  id        String   @id @default(cuid())
+  name      String
+  mimeType  String
+  type      String   @default("image") // image | video
+  size      Int      @default(0)
+  data      String
+  createdAt DateTime @default(now())
+}
+
+// Permintaan kontak dari pengunjung ke supplier
+model ContactRequest {
+  id          String   @id @default(cuid())
+  name        String
+  email       String
+  phone       String   @default("")
+  company     String   @default("")
+  subject     String   @default("")
+  message     String
+  productId   String   @default("")
+  productName String   @default("")
+  quantity    String   @default("") // estimasi jumlah kebutuhan (opsional)
+  unit        String   @default("") // satuan yang dipilih pembeli
+  status      String   @default("baru") // baru | dibaca | selesai
+  createdAt   DateTime @default(now())
+}
+
+// Testimoni pelanggan
+model Testimonial {
+  id        String   @id @default(cuid())
+  name      String
+  role      String   @default("")
+  company   String   @default("")
+  content   String
+  photo     String   @default("")
+  rating    Int      @default(5)
+  visible   Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Pesan live chat pengunjung ⇄ admin (dipakai chat-service socket.io DAN
+// jalur HTTP /api/chat/* — satu tabel yang sama). Waktu memakai ms epoch
+// (BigInt agar tidak meluap Int 32-bit Prisma).
+model ChatMessage {
+  id             String  @id @default(cuid())
+  conversationId String
+  sender         String // "visitor" | "admin"
+  name           String
+  message        String
+  readAt         BigInt?
+  createdAt      BigInt
+
+  @@index([conversationId], map: "idx_chat_conv")
+}

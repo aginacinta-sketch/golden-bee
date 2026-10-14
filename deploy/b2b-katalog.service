@@ -1,0 +1,39 @@
+# ==================================================================
+# systemd unit — aplikasi utama (Next.js standalone :3000)
+#
+# Pemasangan (sesuaikan GANTI dulu nilai di bawah):
+#   1. sudo nano b2b-katalog.service  → ganti /opt/b2b-katalog,
+#      /home/deploy/.bun/bin/bun, dan User= sesuai VPS Anda
+#      (cek lokasi bun dengan: which bun)
+#   2. sudo cp b2b-katalog.service /etc/systemd/system/
+#   3. sudo systemctl daemon-reload
+#   4. sudo systemctl enable --now b2b-katalog
+#   5. sudo journalctl -u b2b-katalog -f     # lihat log
+# ==================================================================
+[Unit]
+Description=Katalog Supplier B2B — Next.js (standalone)
+After=network.target
+
+[Service]
+Type=simple
+# GANTI: folder proyek di VPS
+WorkingDirectory=/opt/b2b-katalog
+# GANTI: user pemilik folder proyek (jangan root bila memungkinkan)
+User=deploy
+Group=deploy
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=0.0.0.0
+# GANTI: samakan dengan lokasi db di WorkingDirectory (path absolut)
+Environment=DATABASE_URL=file:/opt/b2b-katalog/db/custom.db
+# GANTI: hasil "which bun" pada user Anda
+ExecStart=/home/deploy/.bun/bin/bun run start
+Restart=always
+RestartSec=5
+
+# Pengaman dasar
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

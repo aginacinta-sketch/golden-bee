@@ -1,0 +1,55 @@
+# ==================================================================
+# Caddyfile contoh — VPS dengan DOMAIN SENDIRI + HTTPS otomatis
+#
+# Caddy otomatis menerbitkan & memperbarui sertifikat Let's Encrypt
+# tanpa konfigurasi tambahan, syarat:
+#   1. DNS record A domain → IP VPS (lihat PANDUAN-HOSTING.md)
+#   2. Port 80 & 443 terbuka di firewall VPS
+#
+# Pemasangan:
+#   sudo cp Caddyfile.contoh /etc/caddy/Caddyfile
+#   sudo nano /etc/caddy/Caddyfile        # ganti domain contoh
+#   sudo systemctl reload caddy
+# ==================================================================
+
+katalog.contoh-domain.com {
+        # ------------------------------------------------------------
+        # Live chat REALTIME (socket.io chat-service di :3003).
+        # Blok ini meniru perilaku gateway sandbox: request dengan
+        # query ?XTransformPort=NNNN diteruskan ke port NNNN.
+        # Tanpa blok ini live chat tetap jalan (jalur HTTP), hanya
+        # tanpa update seketika (realtime).
+        # ------------------------------------------------------------
+        @transform_port_query {
+                query XTransformPort=*
+        }
+        handle @transform_port_query {
+                reverse_proxy localhost:{query.XTransformPort} {
+                        header_up Host {host}
+                        header_up X-Forwarded-For {remote_host}
+                        header_up X-Forwarded-Proto {scheme}
+                        header_up X-Real-IP {remote_host}
+                }
+        }
+
+        # ------------------------------------------------------------
+        # Aplikasi utama (Next.js standalone di :3000)
+        # ------------------------------------------------------------
+        handle {
+                reverse_proxy localhost:3000 {
+                        header_up Host {host}
+                        header_up X-Forwarded-For {remote_host}
+                        header_up X-Forwarded-Proto {scheme}
+                        header_up X-Real-IP {remote_host}
+                }
+        }
+}
+
+# ------------------------------------------------------------------
+# Opsional: subdomain tambahan (mis. www) — arahkan juga di DNS lalu
+# tambahkan baris berikut:
+#
+# www.katalog.contoh-domain.com {
+#         redir https://katalog.contoh-domain.com{uri} permanent
+# }
+# ------------------------------------------------------------------

@@ -1,0 +1,36 @@
+# ==================================================================
+# systemd unit — chat realtime (socket.io :3003)  [OPSIONAL]
+#
+# Tanpa service ini live chat TETAP berfungsi lewat jalur HTTP
+# /api/chat/* (tanpa update seketika). Nyalakan ini bila ingin
+# pesan masuk/keluar muncul realtime, lalu pastikan Caddyfile
+# memuat blok @transform_port_query (deploy/Caddyfile.contoh).
+#
+# Pemasangan: sama seperti b2b-katalog.service
+#   sudo cp b2b-chat.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now b2b-chat
+# ==================================================================
+[Unit]
+Description=Katalog Supplier B2B — Chat service (socket.io :3003)
+After=network.target
+
+[Service]
+Type=simple
+# GANTI: folder proyek di VPS (service membaca DB di ../../db relatif
+# terhadap file index.ts → harus menjaga struktur proyek asli)
+WorkingDirectory=/opt/b2b-katalog/mini-services/chat-service
+# GANTI: user pemilik folder proyek
+User=deploy
+Group=deploy
+# Catatan: chat-service memakai bun:sqlite dengan path relatif
+# ../../db/custom.db — TIDAK butuh DATABASE_URL, tetapi path di atas
+# WAJIB menunjuk folder mini-services/chat-service di dalam proyek.
+ExecStart=/home/deploy/.bun/bin/bun index.ts
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,41 @@
+# ==================================================================
+# docker-compose.yml — Website Katalog Supplier B2B
+#
+# Pakai:
+#   docker compose up -d --build              # aplikasi utama
+#   docker compose --profile chat up -d --build  # + realtime chat (socket)
+#
+# Database (SQLite) disimpan di named volume "db-data" → data TETAP
+# AMAN meski container dibuat ulang. Cara memindahkan database asli
+# milik Anda ke volume: lihat PANDUAN-HOSTING.md → "Migrasi data".
+# ==================================================================
+services:
+  web:
+    build: .
+    container_name: b2b-katalog-web
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: file:/app/db/custom.db
+    volumes:
+      - db-data:/app/db
+    restart: unless-stopped
+
+  # Opsional — chat realtime (socket.io :3003). Tanpa service ini,
+  # live chat tetap berfungsi lewat jalur HTTP /api/chat/*.
+  # Menyalakan: docker compose --profile chat up -d
+  chat:
+    build: .
+    container_name: b2b-katalog-chat
+    command: ["bun", "mini-services/chat-service/index.ts"]
+    ports:
+      - "3003:3003"
+    volumes:
+      - db-data:/app/db
+    restart: unless-stopped
+    profiles: ["chat"]
+    depends_on:
+      - web
+
+volumes:
+  db-data:
