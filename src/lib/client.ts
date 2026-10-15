@@ -8,11 +8,15 @@ export function getToken(): string | null {
 }
 
 export function setToken(token: string) {
+  if (typeof window === "undefined") return;
   localStorage.setItem(ADMIN_TOKEN_KEY, token);
+  window.dispatchEvent(new CustomEvent("b2b-admin-auth-changed", { detail: { authed: true } }));
 }
 
 export function clearToken() {
+  if (typeof window === "undefined") return;
   localStorage.removeItem(ADMIN_TOKEN_KEY);
+  window.dispatchEvent(new CustomEvent("b2b-admin-auth-changed", { detail: { authed: false } }));
 }
 
 export async function adminFetch(url: string, init?: RequestInit): Promise<Response> {

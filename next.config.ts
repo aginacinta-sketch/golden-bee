@@ -14,9 +14,12 @@ const nextConfig: NextConfig = {
     "/**": ["./db/**"],
   },
   allowedDevOrigins: [
+    "ais-dev-ymjis3bu3gcswnivkcojq5-656747615272.asia-east1.run.app",
+    "ais-pre-ymjis3bu3gcswnivkcojq5-656747615272.asia-east1.run.app",
     "*.run.app",
     "*.googleusercontent.com",
     "localhost:3000",
+    "127.0.0.1:3000",
   ],
   typescript: {
     ignoreBuildErrors: true,

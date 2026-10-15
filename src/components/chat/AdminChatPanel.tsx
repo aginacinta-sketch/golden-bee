@@ -32,7 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, MessagesSquare, SendHorizontal, Trash2, Users } from "lucide-react";
+import { ArrowLeft, MessagesSquare, SendHorizontal, Trash2, Users, Volume2 } from "lucide-react";
 import {
   balasAdmin,
   daftarPercakapanAdmin,
@@ -45,7 +45,7 @@ import {
   type Percakapan,
 } from "@/lib/chatHttp";
 import { getToken } from "@/lib/client";
-import { mainkanNadaPesanMasuk } from "@/lib/sound";
+import { mainkanNadaPesanMasuk, ujiNadaAdmin } from "@/lib/sound";
 import { TombolNada } from "@/components/chat/TombolNada";
 import { toast } from "@/hooks/use-toast";
 
@@ -658,7 +658,7 @@ export function AdminChatPanel({ variant, onUnreadChange, terlihat }: Props) {
               Balas pertanyaan pengunjung website secara realtime.
             </p>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
                 connected && !authGagal ? "bg-emerald-50 text-emerald-700" : "bg-neutral-100 text-neutral-500"
@@ -667,6 +667,20 @@ export function AdminChatPanel({ variant, onUnreadChange, terlihat }: Props) {
               <span className={`inline-block h-1.5 w-1.5 rounded-full ${connected && !authGagal ? "bg-emerald-500" : "bg-neutral-400"}`} />
               {authGagal ? "Sesi tidak berlaku" : connected ? "Tersambung" : "Menyambungkan…"}
             </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void ujiNadaAdmin();
+                toast({ title: "🔔 Uji Suara Notifikasi", description: "Dentang alert audio dimainkan." });
+              }}
+              title="Tes suara notifikasi pesan masuk"
+              className="h-8 gap-1.5 px-2.5 text-xs text-neutral-600 hover:text-neutral-900"
+            >
+              <Volume2 className="h-3.5 w-3.5 text-emerald-600" />
+              <span>Uji Suara</span>
+            </Button>
             <TombolNada sisi="admin" />
           </div>
         </div>

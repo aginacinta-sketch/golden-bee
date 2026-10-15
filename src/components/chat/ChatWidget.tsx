@@ -27,6 +27,7 @@ import {
   MessageCircle,
   SendHorizonal,
   ShieldCheck,
+  UserPlus,
   Volume2,
   VolumeX,
   X,
@@ -40,6 +41,7 @@ import {
   chatHttpUnread,
   type PesanChat,
 } from "@/lib/chatClient";
+import { isPublicQrMode } from "@/lib/shareUrl";
 import { apakahNadaAktif, mainkanNadaPesanMasuk, setNadaAktif } from "@/lib/sound";
 import { clearToken, getToken } from "@/lib/client";
 import { useChatAdmin } from "@/store/chatAdmin";
@@ -159,26 +161,106 @@ export function ChatWidget({ supplierName }: { supplierName: string }) {
     [urutkanDanSet, resetSesi]
   );
 
-  // ---------- pemulihan sesi ----------
-  // Nama + percakapan pengunjung disimpan di localStorage — dipulihkan saat
-  // widget terpasang sehingga percakapan lama tetap tersambung setelah
-  // halaman dimuat ulang (pesan ditangguhkan tetap tampil via polling).
-  useEffect(() => {
-    let namaTersimpan = "";
-    let convTersimpan = "";
+  const masukModeAdmin = useCallback(() => {
+    useChatAdmin.getState().mulai();
+    setAdminAktif(true);
+    setNadaAktifState(apakahNadaAktif("admin"));
+  }, []);
+
+  // Deteksi sesi admin TANPA form sandi di widget: token tersimpan dari
+  // panel admin (#admin) divalidasi ke daftar percakapan (same-origin).
+  const cekSesiAdmin = useCallback(async (): Promise<boolean> => {
+    if (isPublicQrMode()) {
+      setAdminAktif(false);
+      return false;
+    }
+    const token = getToken();
+    if (!token) {
+      setAdminAktif(false);
+      return false;
+    }
     try {
-      namaTersimpan = window.localStorage.getItem(KUNCI_NAMA) || "";
-      convTersimpan = window.localStorage.getItem(KUNCI_CONV) || "";
+      const res = await fetch("/api/chat/conversations", {
+        headers: { "x-admin-token": token },
+        cache: "no-store",
+      });
+      if (res.status === 401 || res.status === 403) {
+        clearToken();
+        useChatAdmin.getState().berhenti();
+        setAdminAktif(false);
+        return false;
+      }
+      if (!res.ok) return false;
+      masukModeAdmin();
+      return true;
+    } catch {
+      return false;
+    }
+  }, [masukModeAdmin]);
+
+  // Inisialisasi sesi:
+  // - Jika admin login: live chat otomatis masuk ke admin.
+  // - Jika admin TIDAK login: saat website dibuka, live chat menampilkan masukkan nama.
+  useEffect(() => {
+    if (isPublicQrMode()) {
+      useChatAdmin.getState().berhenti();
+      setAdminAktif(false);
+      setNama("");
+      setConvId("");
+      convRef.current = "";
+      setPesan([]);
+      return;
+    }
+
+    // 1. Cek sesi admin
+    const token = getToken();
+    if (token) {
+      masukModeAdmin();
+      void cekSesiAdmin();
+      return;
+    }
+
+    // 2. Admin TIDAK login: reset ke form masukkan nama
+    useChatAdmin.getState().berhenti();
+    setAdminAktif(false);
+    setNama("");
+    setConvId("");
+    convRef.current = "";
+    setPesan([]);
+    setNadaAktifState(apakahNadaAktif("pengunjung"));
+    try {
+      window.localStorage.removeItem(KUNCI_CONV);
+      window.localStorage.removeItem(KUNCI_NAMA);
     } catch {
       // abaikan
     }
-    setNama(namaTersimpan);
-    setNadaAktifState(apakahNadaAktif("pengunjung"));
-    if (convTersimpan) {
-      convRef.current = convTersimpan;
-      setConvId(convTersimpan);
-    }
-  }, []);
+  }, [cekSesiAdmin, masukModeAdmin]);
+
+  // Dengarkan perubahan login/logout admin dari tab/komponen lain secara realtime
+  useEffect(() => {
+    const tanganiPerubahanAuth = (e: Event) => {
+      if (isPublicQrMode()) {
+        useChatAdmin.getState().berhenti();
+        setAdminAktif(false);
+        return;
+      }
+      const detail = (e as CustomEvent<{ authed?: boolean }>).detail;
+      if (detail?.authed) {
+        masukModeAdmin();
+        void cekSesiAdmin();
+      } else {
+        useChatAdmin.getState().berhenti();
+        setAdminAktif(false);
+        setNama("");
+        setConvId("");
+        convRef.current = "";
+        setPesan([]);
+        setNadaAktifState(apakahNadaAktif("pengunjung"));
+      }
+    };
+    window.addEventListener("b2b-admin-auth-changed", tanganiPerubahanAuth);
+    return () => window.removeEventListener("b2b-admin-auth-changed", tanganiPerubahanAuth);
+  }, [cekSesiAdmin, masukModeAdmin]);
 
   // Loop polling: ritme menyesuaikan keadaan panel & tab.
   useEffect(() => {
@@ -235,16 +317,43 @@ export function ChatWidget({ supplierName }: { supplierName: string }) {
 
   // ---------- aksi ----------
   const bukaPanel = () => {
+    const isQr = isPublicQrMode();
+    const token = !isQr ? getToken() : null;
+
+    if (token) {
+      // Jika admin login: live chat otomatis masuk ke admin
+      masukModeAdmin();
+      setAdminAktif(true);
+      setTerbuka(true);
+      terbukaRef.current = true;
+      setBelumDibaca(0);
+      void cekSesiAdmin();
+      return;
+    }
+
+    // Jika admin TIDAK login: saat website dibuka dan live chat diklik, tampilkan masukkan nama
+    useChatAdmin.getState().berhenti();
+    setAdminAktif(false);
+    setNama("");
+    setConvId("");
+    convRef.current = "";
+    setPesan([]);
     setTerbuka(true);
     terbukaRef.current = true;
     setBelumDibaca(0);
-    if (convId) void chatHttpRead(convId, "pengunjung").catch(() => {});
-    // Pemilik yang pernah login panel admin: pastikan mode admin terdeteksi
-    // (juga mencoba ulang bila validasi awal gagal karena gangguan jaringan).
-    if (!adminAktif) void cekSesiAdmin();
-    // Fokus otomatis HANYA di perangkat pointer halus (desktop).
+    try {
+      window.localStorage.removeItem(KUNCI_CONV);
+      window.localStorage.removeItem(KUNCI_NAMA);
+    } catch {
+      // abaikan
+    }
+
+    // Fokus otomatis pada input nama di desktop
     window.setTimeout(() => {
-      if (window.matchMedia?.("(pointer: fine)")?.matches) inputRef.current?.focus();
+      if (window.matchMedia?.("(pointer: fine)")?.matches) {
+        const el = document.querySelector<HTMLInputElement>("input[placeholder*='Nama']");
+        el?.focus();
+      }
     }, 250);
   };
 
@@ -277,38 +386,6 @@ export function ChatWidget({ supplierName }: { supplierName: string }) {
     };
   }, []);
 
-  const masukModeAdmin = useCallback(() => {
-    useChatAdmin.getState().mulai();
-    setAdminAktif(true);
-    setNadaAktifState(apakahNadaAktif("admin"));
-  }, []);
-
-  // Deteksi sesi admin TANPA form sandi di widget: token tersimpan dari
-  // panel admin (#admin) divalidasi ke daftar percakapan (same-origin).
-  const cekSesiAdmin = useCallback(async (): Promise<boolean> => {
-    const token = getToken();
-    if (!token) return false;
-    try {
-      const res = await fetch("/api/chat/conversations", {
-        headers: { "x-admin-token": token },
-        cache: "no-store",
-      });
-      if (res.status === 401 || res.status === 403) {
-        clearToken();
-        return false;
-      }
-      if (!res.ok) return false;
-      masukModeAdmin();
-      return true;
-    } catch {
-      return false;
-    }
-  }, [masukModeAdmin]);
-
-  useEffect(() => {
-    void cekSesiAdmin();
-  }, [cekSesiAdmin]);
-
   const keluarAdmin = async () => {
     const token = getToken();
     try {
@@ -322,6 +399,10 @@ export function ChatWidget({ supplierName }: { supplierName: string }) {
     clearToken();
     useChatAdmin.getState().berhenti();
     setAdminAktif(false);
+    setConvId("");
+    convRef.current = "";
+    setNama("");
+    setPesan([]);
     setNadaAktifState(apakahNadaAktif("pengunjung"));
   };
 
@@ -350,11 +431,13 @@ export function ChatWidget({ supplierName }: { supplierName: string }) {
       setPesan([]);
       lastIdRef.current = 0;
       setStatus("menyambung");
-      try {
-        window.localStorage.setItem(KUNCI_NAMA, bersih);
-        window.localStorage.setItem(KUNCI_CONV, id);
-      } catch {
-        // abaikan
+      if (!isPublicQrMode()) {
+        try {
+          window.localStorage.setItem(KUNCI_NAMA, bersih);
+          window.localStorage.setItem(KUNCI_CONV, id);
+        } catch {
+          // abaikan
+        }
       }
       window.setTimeout(() => inputRef.current?.focus(), 100);
     } catch {
@@ -383,11 +466,13 @@ export function ChatWidget({ supplierName }: { supplierName: string }) {
     setSedangKirim(true);
     void chatHttpTyping(convId, "pengunjung", false).catch(() => {});
 
+    const visitorName = nama.trim() || (typeof window !== "undefined" ? window.localStorage.getItem(KUNCI_NAMA) || "" : "");
+
     // Idempoten di server (clientTmpId) — aman mencoba ulang.
     let terkirim = false;
     for (let coba = 0; coba < 3 && !terkirim; coba++) {
       try {
-        const res = await chatHttpSend(convId, bersih, tmp.id);
+        const res = await chatHttpSend(convId, bersih, tmp.id, visitorName);
         urutkanDanSet([res.message]);
         lastIdRef.current = Math.max(lastIdRef.current, Number(res.message.id) || 0);
         terkirim = true;
@@ -516,6 +601,19 @@ export function ChatWidget({ supplierName }: { supplierName: string }) {
                 className="rounded-full p-1.5 text-white/90 transition hover:bg-white/15"
               >
                 <LogOut className="h-4 w-4" />
+              </button>
+            )}
+            {!adminAktif && sudahPunyaConv && (
+              <button
+                onClick={() => {
+                  resetSesi();
+                  setNama("");
+                }}
+                aria-label="Mulai chat sebagai pengunjung baru"
+                title="Ganti Nama / Chat Baru"
+                className="rounded-full p-1.5 text-white/90 transition hover:bg-white/15"
+              >
+                <UserPlus className="h-4 w-4" />
               </button>
             )}
             <button

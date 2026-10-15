@@ -114,7 +114,12 @@ export async function daftarPercakapan(): Promise<Percakapan[]> {
     }[]
   >`
     SELECT m.conversationId AS id,
-      (SELECT name FROM ChatMessage WHERE conversationId = m.conversationId AND sender = 'visitor' ORDER BY createdAt DESC LIMIT 1) AS name,
+      COALESCE(
+        (SELECT value FROM Setting WHERE key = 'chat_name_' || m.conversationId LIMIT 1),
+        (SELECT name FROM ChatMessage WHERE conversationId = m.conversationId AND sender = 'visitor' AND name != 'Pengunjung' ORDER BY createdAt DESC LIMIT 1),
+        (SELECT name FROM ChatMessage WHERE conversationId = m.conversationId AND sender = 'visitor' ORDER BY createdAt DESC LIMIT 1),
+        'Pengunjung'
+      ) AS name,
       (SELECT message FROM ChatMessage WHERE conversationId = m.conversationId ORDER BY createdAt DESC LIMIT 1) AS "lastMessage",
       MAX(m.createdAt) AS "lastAt",
       SUM(CASE WHEN m.sender = 'visitor' AND m.readAt IS NULL THEN 1 ELSE 0 END) AS unread
@@ -122,13 +127,32 @@ export async function daftarPercakapan(): Promise<Percakapan[]> {
     GROUP BY m.conversationId
     ORDER BY lastAt DESC
   `;
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name || "Pengunjung",
-    lastMessage: r.lastMessage || "",
-    lastAt: r.lastAt === null || r.lastAt === undefined ? 0 : Number(r.lastAt),
-    unread: Number(r.unread ?? 0),
-  }));
+  return rows.map((r) => {
+    const lastAt = r.lastAt === null || r.lastAt === undefined ? 0 : Number(r.lastAt);
+    const unread = Number(r.unread ?? 0);
+    const name = r.name || "Pengunjung";
+    const lastMessage = r.lastMessage || "";
+    return {
+      id: r.id,
+      name,
+      nama: name,
+      lastMessage,
+      pesanTerakhir: lastMessage
+        ? {
+            id: String(lastAt),
+            conversationId: r.id,
+            sender: "pengunjung",
+            text: lastMessage,
+            createdAt: lastAt,
+          }
+        : null,
+      lastAt,
+      updatedAt: lastAt,
+      createdAt: lastAt,
+      unread,
+      unreadAdmin: unread,
+    } as unknown as Percakapan;
+  });
 }
 
 /** Hapus SATU percakapan (dengan id) atau SEMUA (tanpa id). */

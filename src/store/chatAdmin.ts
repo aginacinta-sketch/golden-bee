@@ -53,7 +53,10 @@ let gagalBeruntun = 0;
 // "pesan baru" (suara/badge) dan penghapusan gelembung sementara.
 const idTerlihat = new Map<string, number>();
 // Utas yang sedang dibuka punya ritme polling lebih cepat (2 dtk).
+let inisialisasiAwal = false;
+
 let tickUtas = 0;
+let tickDaftar = 0;
 
 const hitungTotal = (daftar: PercakapanChat[]) =>
   daftar.reduce((acc, c) => acc + (c.unreadAdmin > 0 ? 1 : 0), 0);
@@ -109,38 +112,60 @@ export const useChatAdmin = create<ChatAdminState>((set, get) => {
     if (token !== tokenSaatIni) {
       tokenSaatIni = token;
       gagalBeruntun = 0;
+      tickDaftar = 0;
+      inisialisasiAwal = false;
       if (get().status !== "aktif") set({ status: "aktif" });
     }
     sedangPoll = true;
     try {
-      const res = await chatHttpConversations(tokenSaatIni);
-      gagalBeruntun = 0;
-      if (get().status !== "aktif") set({ status: "aktif" });
+      tickDaftar++;
+      const perluAmbilDaftar = tickDaftar === 1 || tickDaftar % 6 === 0;
 
-      // Deteksi pesan pengunjung baru → suara (kecuali utas itu sedang
-      // dibuka dan panel aktif — dalam arti admin sedang melihatnya).
-      const lama = get().daftar;
-      for (const c of res.conversations || []) {
-        const terlihatSebelumnya = idTerlihat.get(c.id) || 0;
-        const idTerakhir = c.pesanTerakhir ? Number(c.pesanTerakhir.id) : 0;
-        const baru =
-          c.pesanTerakhir &&
-          c.pesanTerakhir.sender === "pengunjung" &&
-          idTerakhir > terlihatSebelumnya &&
-          lama.some((x) => x.id === c.id); // percakapan lama (bukan baru dibuat)
-        if (baru && !(get().panelAktif && get().terbukaId === c.id)) {
-          mainkanNadaPesanMasuk("admin");
+      if (perluAmbilDaftar) {
+        const res = await chatHttpConversations(tokenSaatIni);
+        gagalBeruntun = 0;
+        if (get().status !== "aktif") set({ status: "aktif" });
+
+        // Deteksi pesan pengunjung baru → suara audio alert + event pesan masuk
+        for (const c of res.conversations || []) {
+          const terlihatSebelumnya = idTerlihat.get(c.id) ?? 0;
+          const idTerakhir = c.pesanTerakhir ? Number(c.pesanTerakhir.id) : 0;
+          const isPesanPengunjung =
+            c.pesanTerakhir && c.pesanTerakhir.sender === "pengunjung";
+
+          if (inisialisasiAwal && isPesanPengunjung && idTerakhir > terlihatSebelumnya) {
+            // Bunyikan audio alert jika utas ini sedang tidak aktif dilihat
+            const sedangBukaUtasIni = get().panelAktif && get().terbukaId === c.id;
+            if (!sedangBukaUtasIni) {
+              mainkanNadaPesanMasuk("admin");
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("b2b-admin-new-chat-message", {
+                    detail: {
+                      conversationId: c.id,
+                      visitorName:
+                        c.nama ||
+                        (c as unknown as { name?: string }).name ||
+                        "Pengunjung",
+                      text: c.pesanTerakhir?.text || "",
+                    },
+                  })
+                );
+              }
+            }
+          }
+          if (idTerakhir > terlihatSebelumnya) idTerlihat.set(c.id, idTerakhir);
         }
-        if (idTerakhir > terlihatSebelumnya) idTerlihat.set(c.id, idTerakhir);
+        inisialisasiAwal = true;
+
+        setDaftar(res.conversations || []);
       }
 
-      setDaftar(res.conversations || []);
-
-      // Utas terbuka: tarik inkremental tiap ±2 dtk (4 siklus × 500ms).
+      // Utas terbuka: tarik inkremental tiap ±1,5 dtk (3 siklus × 500ms).
       const terbuka = get().terbukaId;
       if (terbuka) {
         tickUtas++;
-        if (tickUtas % 4 === 0) {
+        if (tickUtas % 3 === 0) {
           const sudah = get().pesan[terbuka] || [];
           const since = sudah.length
             ? Math.max(
@@ -203,8 +228,10 @@ export const useChatAdmin = create<ChatAdminState>((set, get) => {
 
       // Loop ringan 500ms yang memanggil pollSekali (ia sendiri menjaga
       // agar tidak tumpang-tindih) — memungkinkan ritme berbeda untuk
-      // daftar (3,5 dtk) dan utas terbuka (2 dtk).
+      // daftar (3 dtk) dan utas terbuka (1,5 dtk).
       tickUtas = 0;
+      tickDaftar = 0;
+      inisialisasiAwal = false;
       void pollSekali();
       siklus = setInterval(() => void pollSekali(), 500);
       pollTimer = setTimeout(() => {
@@ -224,6 +251,9 @@ export const useChatAdmin = create<ChatAdminState>((set, get) => {
       if (timerMengetik) clearTimeout(timerMengetik);
       sedangPoll = false;
       gagalBeruntun = 0;
+      tickUtas = 0;
+      tickDaftar = 0;
+      inisialisasiAwal = false;
       idTerlihat.clear();
       set({
         status: "menyambung",

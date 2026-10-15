@@ -19,8 +19,8 @@ export function SiteFooter({ settings, menus, onNavigate }: Props) {
           {/* Brand */}
           <div>
             <p className="text-2xl font-bold tracking-tight">
-              {settings.brandPrimary}
-              <span>{settings.brandAccent}</span>
+              <span>{settings.brandPrimary}</span>
+              <span style={{ color: "var(--bp-accent, #84BD00)" }}>{settings.brandAccent}</span>
             </p>
             <p className="mt-3 text-sm leading-relaxed text-white/70">{settings.footerText}</p>
             <div className="mt-4 flex gap-2">

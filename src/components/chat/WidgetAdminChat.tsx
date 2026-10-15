@@ -139,6 +139,16 @@ export function WidgetAdminChat() {
           )}
           {daftar.map((c) => {
             const aktif = c.id === terbukaId;
+            const nama = String(c.nama || (c as unknown as { name?: string }).name || "Pengunjung").trim();
+            const huruf = (nama.charAt(0) || "?").toUpperCase();
+            const waktu = Number(c.updatedAt || (c as unknown as { lastAt?: number }).lastAt || c.createdAt || 0);
+            const unreadCount = Number(c.unreadAdmin ?? (c as unknown as { unread?: number }).unread ?? 0);
+            const pesanTeks = c.pesanTerakhir
+              ? `${c.pesanTerakhir.sender === "admin" ? "Anda: " : ""}${potong(c.pesanTerakhir.text)}`
+              : (c as unknown as { lastMessage?: string }).lastMessage
+              ? potong(String((c as unknown as { lastMessage: string }).lastMessage))
+              : "Belum ada pesan";
+
             return (
               <button
                 key={c.id}
@@ -151,24 +161,22 @@ export function WidgetAdminChat() {
                 }`}
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-sm font-bold text-neutral-600">
-                  {c.nama.trim().charAt(0).toUpperCase() || "?"}
+                  {huruf}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm font-semibold text-neutral-900">{c.nama}</span>
+                    <span className="truncate text-sm font-semibold text-neutral-900">{nama}</span>
                     <span className="shrink-0 text-[10px] text-neutral-400">
-                      {waktuRelatif(c.updatedAt)}
+                      {waktuRelatif(waktu)}
                     </span>
                   </span>
                   <span className="mt-0.5 flex items-center justify-between gap-2">
                     <span className="truncate text-xs text-neutral-500">
-                      {c.pesanTerakhir
-                        ? `${c.pesanTerakhir.sender === "admin" ? "Anda: " : ""}${potong(c.pesanTerakhir.text)}`
-                        : "Belum ada pesan"}
+                      {pesanTeks}
                     </span>
-                    {c.unreadAdmin > 0 && (
+                    {unreadCount > 0 && (
                       <span className="shrink-0 rounded-full bg-[var(--bp-accent,#84BD00)] px-1.5 py-0.5 text-[10px] font-bold text-white">
-                        {c.unreadAdmin}
+                        {unreadCount}
                       </span>
                     )}
                   </span>
@@ -180,6 +188,9 @@ export function WidgetAdminChat() {
       </div>
     );
   }
+
+  const namaTerbuka = String(terbuka?.nama || (terbuka as unknown as { name?: string })?.name || "Pengunjung").trim();
+  const hurufTerbuka = (namaTerbuka.charAt(0) || "?").toUpperCase();
 
   // ---------- Utas percakapan ----------
   return (
@@ -194,10 +205,10 @@ export function WidgetAdminChat() {
           <ArrowLeft className="h-5 w-5" />
         </button>
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-xs font-bold text-neutral-600">
-          {terbuka?.nama.trim().charAt(0).toUpperCase() || "?"}
+          {hurufTerbuka}
         </span>
         <div className="min-w-0 flex-1 leading-tight">
-          <p className="truncate text-sm font-semibold text-neutral-900">{terbuka?.nama}</p>
+          <p className="truncate text-sm font-semibold text-neutral-900">{namaTerbuka}</p>
           <p className="text-[11px] text-neutral-400">
             {mengetik ? (
               <span className="italic text-emerald-600">sedang mengetik…</span>
@@ -265,7 +276,7 @@ export function WidgetAdminChat() {
         {mengetik && (
           <div className="flex justify-start">
             <div className="rounded-2xl rounded-bl-sm border border-neutral-200 bg-white px-3.5 py-2 text-xs italic text-neutral-500 shadow-sm">
-              {terbuka?.nama} sedang mengetik…
+              {namaTerbuka} sedang mengetik…
             </div>
           </div>
         )}

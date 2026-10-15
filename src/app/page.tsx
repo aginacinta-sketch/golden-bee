@@ -3,27 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { CatalogSite } from "@/components/catalog/CatalogSite";
 import { AdminPanel } from "@/components/admin/AdminPanel";
-import { isPublicQrMode, ambilKunciAkses } from "@/lib/shareUrl";
-import { getToken } from "@/lib/client";
+import { isPublicQrMode } from "@/lib/shareUrl";
 import { useNotifikasiPesanBaru } from "@/hooks/use-notifikasi-pesan";
+import type { SettingsMap } from "@/lib/types";
 
-/**
- * Keputusan tampilan (katalog vs admin) — ANTISIPASI AKSES:
- *  1) Mode publik QR (?via=qr, termasuk varian "?via=qr/"): panel admin
- *     TIDAK PERNAH tampil — bahkan bagi admin ber-sesi. Pengunjung dari
- *     link QR hanya melihat website.
- *  2) Tanpa hash #admin → website katalog biasa.
- *  3) Hash #admin + token sesi valid → panel admin langsung.
- *  4) Hash #admin + izin KLIK tombol Admin di header (izinAdminRef — flag
- *     in-memory, tidak persist) → halaman login.
- *  5) Hash #admin + kunci rahasia valid (/?k=KUNCI#admin) → halaman login.
- *  6) Selain itu (mis. mengetik /#admin atau ?k=salah#admin) → katalog
- *     murni TANPA jejak login apa pun.
- */
 export default function Home() {
   const [view, setView] = useState<"catalog" | "admin">("catalog");
-  // Notifikasi pesan kontak masuk (toast + dentang) untuk admin ber-sesi —
-  // dipasang sekali di root agar hidup di katalog maupun panel admin.
+  const [sharedSettings, setSharedSettings] = useState<SettingsMap | null>(null);
   useNotifikasiPesanBaru(view === "admin");
   // Izin membuka halaman login yang HANYA diberikan lewat klik tombol Admin
   // di header (custom event) — flag in-memory, hilang saat halaman dimuat ulang.
@@ -31,47 +17,16 @@ export default function Home() {
 
   useEffect(() => {
     const putuskanView = async (): Promise<"catalog" | "admin" | null> => {
-      // 1) Mode publik QR: blokir total, apa pun kondisi sesi/hash/kunci.
+      // 1) Mode publik QR (?via=qr): blokir total akses admin untuk pengunjung QR.
       if (isPublicQrMode()) return "catalog";
-      // 2) Tanpa hash #admin → website biasa.
-      if (!window.location.hash.startsWith("#admin")) return "catalog";
-      // 3) Admin ber-sesi (token valid) → panel langsung.
-      const token = getToken();
-      if (token) {
-        try {
-          const res = await fetch("/api/admin/session", {
-            headers: { "x-admin-token": token },
-            cache: "no-store",
-          });
-          if (res.ok) return "admin";
-        } catch {
-          // jaringan gagal → lanjut pemeriksaan berikutnya
-        }
-      }
-      // 4) Izin dari klik tombol Admin pada sesi halaman ini.
-      if (izinAdminRef.current) return "admin";
-      // 5) Kunci rahasia pada URL (tautan berkunci).
-      const kunci = ambilKunciAkses();
-      if (kunci) {
-        try {
-          const res = await fetch(`/api/admin/gate?key=${encodeURIComponent(kunci)}`, {
-            cache: "no-store",
-          });
-          if (res.ok) return "admin";
-        } catch {
-          // abaikan — kunci tidak bisa diverifikasi
-        }
-      }
-      // 6) Selain itu: katalog murni — TANPA form login apa pun.
+      // 2) Bila hash diawali #admin → tampilkan panel admin (menampilkan login bila belum terotentikasi).
+      if (window.location.hash.startsWith("#admin")) return "admin";
+      // 3) Selain itu: katalog publik.
       return "catalog";
     };
 
     const terapkan = () => {
       void putuskanView().then((hasil) => {
-        // Keputusan selesai — lepas penahan boot admin (kelas boot-admin
-        // menyembunyikan katalog + menampilkan layar netral saat boot
-        // dengan hash #admin; lihat layout.tsx & globals.css).
-        document.documentElement.classList.remove("boot-admin");
         if (hasil) setView(hasil);
       });
     };
@@ -104,5 +59,9 @@ export default function Home() {
     };
   }, []);
 
-  return view === "admin" ? <AdminPanel /> : <CatalogSite />;
+  return view === "admin" ? (
+    <AdminPanel onSettingsChange={setSharedSettings} />
+  ) : (
+    <CatalogSite initialSettings={sharedSettings || undefined} onSettingsLoaded={setSharedSettings} />
+  );
 }

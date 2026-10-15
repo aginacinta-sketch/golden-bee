@@ -1,7 +1,3 @@
-// POST /api/chat/read — menandai pesan sudah dibaca.
-// Body: { conversationId, side: "admin" | "pengunjung" }
-// - side=admin      → pesan PENGUNJUNG ditandai dibaca admin.
-// - side=pengunjung → balasan ADMIN ditandai dibaca pengunjung.
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -12,20 +8,21 @@ export async function POST(req: Request) {
       conversationId?: string;
       side?: string;
     };
-    const conversationId = String(body.conversationId || "");
-    const conv = await db.chatConversation.findUnique({ where: { id: conversationId } });
-    if (!conv) {
-      return Response.json({ error: "Percakapan tidak ditemukan." }, { status: 404 });
+    const conversationId = String(body.conversationId || "").trim();
+    if (!conversationId) {
+      return Response.json({ error: "conversationId wajib diisi." }, { status: 400 });
     }
+
+    const now = BigInt(Date.now());
     if (body.side === "admin") {
       await db.chatMessage.updateMany({
-        where: { conversationId, sender: "pengunjung", dibacaAdmin: false },
-        data: { dibacaAdmin: true },
+        where: { conversationId, sender: "visitor", readAt: null },
+        data: { readAt: now },
       });
     } else {
       await db.chatMessage.updateMany({
-        where: { conversationId, sender: "admin", dibacaPengunjung: false },
-        data: { dibacaPengunjung: true },
+        where: { conversationId, sender: "admin", readAt: null },
+        data: { readAt: now },
       });
     }
     return Response.json({ ok: true });

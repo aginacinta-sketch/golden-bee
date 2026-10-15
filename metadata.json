@@ -1,0 +1,6 @@
+{
+  "name": "MitraDagang — Katalog Supplier B2B Indonesia",
+  "description": "Katalog supplier B2B lengkap: temukan produk supplier terpercaya, cari produk, dan kirim permintaan kontak langsung ke pemasok.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

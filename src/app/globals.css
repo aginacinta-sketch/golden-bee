@@ -149,31 +149,7 @@ html.qr-public nextjs-portal {
   display: none !important;
 }
 
-/* Boot panel admin (URL membawa hash #admin): sembunyikan render awal
-   katalog — termasuk spinner hijau "Memuat katalog…" — agar tidak ada
-   kedipan hijau sebelum panel admin tampil. Kelas boot-admin dipasang
-   skrip inline di layout.tsx (sebelum body dirender) dan dilepas oleh
-   page.tsx begitu pemeriksaan sesi selesai. Layar netral digantikan
-   oleh ::after di bawah. */
-html.boot-admin [data-app-root] {
-  display: none !important;
-}
 
-/* Layar boot netral pengganti: teks abu-abu di atas putih — TANPA warna
-   aksen hijau, sehingga tidak ada kedipan warna apa pun. */
-html.boot-admin body::after {
-  content: "Menyiapkan panel admin…";
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #fff;
-  color: #94a3b8;
-  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
-  font-size: 0.875rem;
-}
 
 /* Scrollbar tipis untuk daftar pesan/percakapan live chat */
 .chat-scroll::-webkit-scrollbar {

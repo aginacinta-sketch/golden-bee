@@ -10,21 +10,24 @@ import { ContactDialog, type ContactPrefill } from "./ContactDialog";
 import { VideoDialog } from "./VideoDialog";
 import { ProductDetailDialog, ProductPrintSheet } from "./ProductDetailDialog";
 import { CatalogPrintSheet } from "./CatalogPrintSheet";
-import { ChatWidget } from "./ChatWidget";
+import { ChatWidget } from "@/components/chat/ChatWidget";
 import { apiJson } from "@/lib/client";
 import { applyThemeVars } from "@/lib/themeVars";
 import type { MenuItem, Product, SettingsMap, Testimonial } from "@/lib/types";
+import { FALLBACK_SETTINGS, FALLBACK_MENUS, FALLBACK_PRODUCTS } from "@/lib/constants";
+import { getCachedSettings, saveCachedSettings } from "@/lib/settingsCache";
 
-export function CatalogSite() {
-  const [settings, setSettings] = useState<SettingsMap | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [menus, setMenus] = useState<MenuItem[]>([]);
+interface CatalogSiteProps {
+  initialSettings?: SettingsMap;
+  onSettingsLoaded?: (settings: SettingsMap) => void;
+}
+
+export function CatalogSite({ initialSettings, onSettingsLoaded }: CatalogSiteProps = {}) {
+  const [settings, setSettings] = useState<SettingsMap>(initialSettings || FALLBACK_SETTINGS);
+  const [products, setProducts] = useState<Product[]>(FALLBACK_PRODUCTS);
+  const [menus, setMenus] = useState<MenuItem[]>(FALLBACK_MENUS);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
-  // Gagal memuat data dari server (mis. gangguan database) — ditampilkan
-  // sebagai layar error + tombol coba lagi, BUKAN spinner tanpa batas waktu
-  // (kasus lampau: server produksi bermasalah → pengguna hanya melihat
-  // "Memuat katalog…" selamanya tanpa tahu ada yang salah).
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [gagalMuat, setGagalMuat] = useState(false);
 
   const [search, setSearch] = useState("");
@@ -44,6 +47,8 @@ export function CatalogSite() {
         apiJson<Testimonial[]>("/api/testimonials"),
       ]);
       setSettings(s);
+      saveCachedSettings(s);
+      onSettingsLoaded?.(s);
       setProducts(p);
       setMenus(m);
       setTestimonials(t);
@@ -54,7 +59,21 @@ export function CatalogSite() {
     } finally {
       setLoading(false);
     }
+  }, [onSettingsLoaded]);
+
+  useEffect(() => {
+    // Di peramban setelah hidrasi selesai: perbarui dari cache jika ada
+    const cached = getCachedSettings();
+    if (cached) {
+      setSettings((prev) => ({ ...prev, ...cached }));
+    }
   }, []);
+
+  useEffect(() => {
+    if (initialSettings) {
+      setSettings(initialSettings);
+    }
+  }, [initialSettings]);
 
   useEffect(() => {
     loadData();
@@ -68,6 +87,15 @@ export function CatalogSite() {
       header: settings.headerColor || "#0B3B2E",
     });
   }, [settings]);
+
+  // Sinkronkan nama pada tab browser mengikuti nama pemasok
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const namaPemasok = settings?.supplierName?.trim();
+    if (namaPemasok) {
+      document.title = namaPemasok;
+    }
+  }, [settings?.supplierName]);
 
   // Alur cetak katalog: render lembar katalog -> beri waktu gambar termuat ->
   // buka dialog cetak browser (pilih "Simpan sebagai PDF" untuk mengunduh).
@@ -108,46 +136,10 @@ export function CatalogSite() {
     setContactOpen(true);
   }, []);
 
-  if (!settings) {
-    return (
-      // data-app-root: penanda akar katalog — dipakai CSS boot-admin
-      // (globals.css) untuk menyembunyikan layar ini saat boot panel admin
-      // agar spinner hijau tidak sempat tampak (kedipan hijau).
-      <div data-app-root className="flex min-h-screen items-center justify-center bg-slate-50">
-        {gagalMuat ? (
-          <div className="flex flex-col items-center gap-4 rounded-xl border bg-white p-8 text-center shadow-sm">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-2xl" aria-hidden="true">
-              ⚠️
-            </div>
-            <div>
-              <p className="text-base font-semibold text-slate-800">Gagal memuat katalog</p>
-              <p className="mt-1 text-sm text-slate-500">
-                Server sedang tidak merespons dengan benar. Coba beberapa saat lagi.
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setGagalMuat(false);
-                loadData();
-              }}
-              className="rounded-lg bg-[#84BD00] px-6 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-[#74a400] active:scale-[0.98]"
-            >
-              Coba Lagi
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-3">
-            <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#84BD00] border-t-transparent" />
-            <p className="text-sm text-slate-500">Memuat katalog…</p>
-          </div>
-        )}
-      </div>
-    );
-  }
 
   const themeStyle = {
-    "--bp-header": settings.headerColor || "#0B3B2E",
-    "--bp-accent": settings.accentColor || "#84BD00",
+    "--bp-header": settings.headerColor || "#b1ab06",
+    "--bp-accent": settings.accentColor || "#b1ab06",
   } as React.CSSProperties;
 
   return (

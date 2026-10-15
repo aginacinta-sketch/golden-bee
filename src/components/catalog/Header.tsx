@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Building2, ShieldCheck, Menu as MenuIcon, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DynamicIcon } from "@/lib/icons";
@@ -16,8 +16,12 @@ interface Props {
 
 export function Header({ settings, menus, onContact, onNavigate }: Props) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  // Mode publik (link hasil scan QR): tombol Admin disembunyikan
-  const publicQr = isPublicQrMode();
+  // Mode publik (link hasil scan QR): tombol Admin disembunyikan (hydration-safe)
+  const [publicQr, setPublicQr] = useState(false);
+
+  useEffect(() => {
+    setPublicQr(isPublicQrMode());
+  }, []);
 
   const goAdmin = () => {
     // Minta aplikasi membuka halaman login admin (divalidasi ulang di
@@ -37,8 +41,8 @@ export function Header({ settings, menus, onContact, onNavigate }: Props) {
               className="flex items-baseline gap-0.5 text-2xl font-bold tracking-tight select-none shrink-0"
               aria-label="Ke beranda"
             >
-              <span>{settings.brandPrimary}</span>
-              <span>{settings.brandAccent}</span>
+              <span className="text-white">{settings.brandPrimary}</span>
+              <span style={{ color: "var(--bp-accent, #b1ab06)" }}>{settings.brandAccent}</span>
             </button>
 
             {/* Aksi */}

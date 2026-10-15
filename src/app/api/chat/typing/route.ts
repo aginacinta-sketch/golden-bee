@@ -1,15 +1,31 @@
 import { NextRequest } from "next/server";
-import { aturMengetikPengunjung } from "@/lib/chatPresence";
+import { aturMengetikAdmin, aturMengetikPengunjung } from "@/lib/chatPresence";
 import { validasiVisitorId } from "@/lib/chatServer";
 import { badRequest, json } from "@/lib/admin";
 
-/** POST /api/chat/typing — status mengetik pengunjung (TTL 4 detik). */
+export const dynamic = "force-dynamic";
+
+/** POST /api/chat/typing — status mengetik pengunjung / admin (TTL 4 detik). */
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as
-    | { visitorId?: string; typing?: boolean }
+    | {
+        visitorId?: string;
+        conversationId?: string;
+        typing?: boolean;
+        aktif?: boolean;
+        side?: string;
+      }
     | null;
-  const visitorId = validasiVisitorId(body?.visitorId);
-  if (!visitorId) return badRequest("visitorId wajib diisi.");
-  aturMengetikPengunjung(visitorId, !!body?.typing);
+
+  const id = validasiVisitorId(body?.conversationId || body?.visitorId);
+  if (!id) return badRequest("ID percakapan wajib diisi.");
+
+  const aktif = body?.aktif !== undefined ? !!body.aktif : !!body?.typing;
+  if (body?.side === "admin") {
+    aturMengetikAdmin(id, aktif);
+  } else {
+    aturMengetikPengunjung(id, aktif);
+  }
+
   return json({ ok: true });
 }

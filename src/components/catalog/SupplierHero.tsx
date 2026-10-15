@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   MapPin,
   ChevronDown,
@@ -45,19 +45,22 @@ function WaIcon({ className }: { className?: string }) {
   );
 }
 
-const subscribeHash = (onStoreChange: () => void) => {
-  window.addEventListener("hashchange", onStoreChange);
-  return () => window.removeEventListener("hashchange", onStoreChange);
-};
-
 export function SupplierHero({ settings, onContact }: Props) {
   const { toast } = useToast();
   const [expanded, setExpanded] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  // URL profil untuk isi QR code — tanpa hash + penanda via=qr (mode publik,
-  // panel admin tidak dapat dibuka dari link hasil scan)
-  const profileUrl = useSyncExternalStore(subscribeHash, buildShareUrl, () => "");
+  const [mounted, setMounted] = useState(false);
+  const [profileUrl, setProfileUrl] = useState("");
+
+  useEffect(() => {
+    setMounted(true);
+    setProfileUrl(buildShareUrl());
+    const onHash = () => setProfileUrl(buildShareUrl());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
   const tags = parseTagsClient(settings.tags);
   const desc = settings.supplierDesc || "";
 
@@ -75,10 +78,8 @@ export function SupplierHero({ settings, onContact }: Props) {
   const showVerified = settings.verified === "1";
   const showQr = settings.showQr === "1";
   // Isi QR code: link kustom dari admin bila diatur, selain itu tautan profil otomatis.
-  // Bila link kustom menunjuk ke website ini sendiri, penanda via=qr ditambahkan
-  // otomatis agar hasil scan membuka MODE PUBLIK (menu Admin disembunyikan).
   const rawCustomQr = (settings.qrCustomUrl || "").trim();
-  const qrValue = rawCustomQr ? withQrMarkerIfSelf(rawCustomQr) : profileUrl;
+  const qrValue = mounted ? (rawCustomQr ? withQrMarkerIfSelf(rawCustomQr) : profileUrl) : "";
   const isCustomQr = rawCustomQr.length > 0;
 
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(

@@ -19,6 +19,8 @@ import {
   ExternalLink,
   LogOut,
   ShieldCheck,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { AdminLogin } from "./AdminLogin";
 import { AdminDashboard } from "./AdminDashboard";
@@ -34,28 +36,22 @@ import { adminFetch, clearToken, getToken, setToken } from "@/lib/client";
 import { applyThemeVars } from "@/lib/themeVars";
 import type { ContactRequest, SettingsMap } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
+import { useNotifikasiChatAdmin } from "@/hooks/use-notifikasi-chat-admin";
 import { RfqSheet } from "./RfqSheet";
 
-const MENU_TRIGGER =
-  "h-auto min-h-11 w-full justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-2 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:ring-neutral-300 data-[state=active]:bg-[var(--bp-accent,#84BD00)] data-[state=active]:font-semibold data-[state=active]:text-neutral-900 data-[state=active]:shadow-sm lg:justify-start lg:gap-2.5 lg:px-3 lg:py-2.5 lg:text-sm";
+import { getCachedSettings, saveCachedSettings } from "@/lib/settingsCache";
 
-export function AdminPanel() {
+const MENU_TRIGGER =
+  "h-auto min-h-11 w-full justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-2 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:ring-neutral-300 data-[state=active]:bg-[var(--bp-accent,#b1ab06)] data-[state=active]:font-semibold data-[state=active]:text-neutral-900 data-[state=active]:shadow-sm lg:justify-start lg:gap-2.5 lg:px-3 lg:py-2.5 lg:text-sm";
+
+interface AdminPanelProps {
+  onSettingsChange?: (settings: SettingsMap) => void;
+}
+
+export function AdminPanel({ onSettingsChange }: AdminPanelProps = {}) {
   const { toast } = useToast();
-  // Panel admin hanya dirender di sisi klien, jadi lazy init dari localStorage aman.
   const [authed, setAuthed] = useState<boolean>(() => typeof window !== "undefined" && !!getToken());
-  // Setelan diinisialisasi dari cache aksen terakhir (localStorage) agar warna
-  // merek langsung dipakai sejak render pertama — tanpa ini menu aktif dulu
-  // berwarna hijau fallback #84BD00 lalu berubah ke warna merek setelah
-  // /api/settings selesai = kedipan hijau kecil setiap kali masuk panel.
-  const [settings, setSettings] = useState<SettingsMap>(() => {
-    if (typeof window === "undefined") return {};
-    try {
-      const cache = window.localStorage.getItem("bp-setelan-aksen");
-      return cache ? (JSON.parse(cache) as SettingsMap) : {};
-    } catch {
-      return {};
-    }
-  });
+  const [settings, setSettings] = useState<SettingsMap>(() => getCachedSettings());
   // Tab aktif dikendalikan agar kartu dashboard dapat berpindah menu (pesan/produk/dsb.).
   const [tab, setTab] = useState("dashboard");
   // Menu navigasi mobile: terbuka/tutup lewat tombol hamburger (lg: selalu tampil sbg sidebar).
@@ -64,6 +60,13 @@ export function AdminPanel() {
     setTab(v);
     setMenuBuka(false);
   }, []);
+
+  const bukaTabChat = useCallback(() => {
+    pindahTab("livechat");
+  }, [pindahTab]);
+
+  const { totalUnreadChat, audioAktif, setAudioAktif, ujiAudio } =
+    useNotifikasiChatAdmin(authed, bukaTabChat);
   // Pesan yang lembar RFQ-nya sedang dicetak (dirender di luar wrapper — pola isolasi cetak).
   const [rfqFor, setRfqFor] = useState<ContactRequest | null>(null);
 
@@ -73,26 +76,16 @@ export function AdminPanel() {
       if (res.ok) {
         const data = (await res.json()) as SettingsMap;
         setSettings(data);
-        // Simpan aksen untuk paint instan pada kunjungan berikutnya (anti kedip).
-        try {
-          window.localStorage.setItem(
-            "bp-setelan-aksen",
-            JSON.stringify({ accentColor: data.accentColor, headerColor: data.headerColor }),
-          );
-        } catch {
-          // penyimpanan penuh/ditolak — abaikan, fallback tetap berjalan
-        }
+        saveCachedSettings(data);
+        onSettingsChange?.(data);
       }
     } catch {
       // abaikan
     }
-  }, []);
+  }, [onSettingsChange]);
 
   useEffect(() => {
     if (!authed) return;
-    // Muat pengaturan saat sesi admin aktif (setState terjadi dalam callback async,
-    // bukan sinkron di body effect — aman dari cascading render).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadSettings();
   }, [authed, loadSettings]);
 
@@ -114,17 +107,28 @@ export function AdminPanel() {
   };
 
   const goWebsite = () => {
+    saveCachedSettings(settings);
+    onSettingsChange?.(settings);
     window.location.hash = "";
     window.scrollTo({ top: 0 });
   };
 
   // Sinkronkan tema ke :root agar Dialog/portal admin ikut mewarisi warna
   // (dipanggil sebelum early return — aturan hooks)
-  const accent = settings.accentColor || "#84BD00";
-  const headerColor = settings.headerColor || "";
+  const accent = settings.accentColor || "#b1ab06";
+  const headerColor = settings.headerColor || "#b1ab06";
   useEffect(() => {
     applyThemeVars({ accent, header: headerColor || undefined });
   }, [accent, headerColor]);
+
+  // Sinkronkan nama pada tab browser mengikuti nama pemasok
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const namaPemasok = settings?.supplierName?.trim();
+    if (namaPemasok) {
+      document.title = `${namaPemasok} (Admin)`;
+    }
+  }, [settings?.supplierName]);
 
   // Alur cetak Lembar RFQ: tunggu gambar/layout 400ms -> window.print() ->
   // reset via afterprint + cadangan timeout 250ms (pola sama dengan cetak katalog).
@@ -187,6 +191,21 @@ export function AdminPanel() {
               <Button
                 variant="ghost"
                 size="icon"
+                className={cn(
+                  "h-11 w-11",
+                  audioAktif
+                    ? "text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                    : "text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+                )}
+                onClick={() => setAudioAktif(!audioAktif)}
+                title={audioAktif ? "Alert audio aktif (klik untuk matikan)" : "Alert audio mati (klik untuk aktifkan)"}
+                aria-label={audioAktif ? "Matikan audio alert" : "Aktifkan audio alert"}
+              >
+                {audioAktif ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 className="h-11 w-11 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
                 onClick={goWebsite}
                 aria-label="Lihat website"
@@ -234,8 +253,14 @@ export function AdminPanel() {
             <TabsTrigger value="pesan" className={MENU_TRIGGER}>
               <Inbox className="h-4 w-4" /> <span className="min-w-0 truncate">Pesan</span>
             </TabsTrigger>
-            <TabsTrigger value="livechat" className={MENU_TRIGGER}>
-              <MessagesSquare className="h-4 w-4" /> <span className="min-w-0 truncate">Live Chat</span>
+            <TabsTrigger value="livechat" className={cn(MENU_TRIGGER, "relative")}>
+              <MessagesSquare className="h-4 w-4" />
+              <span className="min-w-0 flex-1 truncate text-left">Live Chat</span>
+              {totalUnreadChat > 0 && (
+                <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white shadow-sm">
+                  {totalUnreadChat > 9 ? "9+" : totalUnreadChat}
+                </span>
+              )}
             </TabsTrigger>
             <TabsTrigger value="akun" className={MENU_TRIGGER}>
               <KeyRound className="h-4 w-4" /> <span className="min-w-0 truncate">Akun</span>
@@ -243,7 +268,45 @@ export function AdminPanel() {
           </TabsList>
 
           {/* Aksi bawah (desktop) */}
-          <div className="mt-auto hidden space-y-1 border-t border-neutral-200 p-3 lg:block">
+          <div className="mt-auto hidden space-y-2 border-t border-neutral-200 p-3 lg:block">
+            {/* Widget Audio Alert */}
+            <div className="flex items-center justify-between rounded-lg border border-neutral-200/80 bg-neutral-50 px-2.5 py-1.5 text-xs">
+              <span className="flex items-center gap-1.5 font-medium text-neutral-700">
+                {audioAktif ? (
+                  <Volume2 className="h-4 w-4 text-emerald-600" />
+                ) : (
+                  <VolumeX className="h-4 w-4 text-neutral-400" />
+                )}
+                <span>Alert Audio</span>
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={ujiAudio}
+                  title="Uji coba dentang alert audio"
+                  className="h-6 px-1.5 text-[11px] font-medium text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900"
+                >
+                  Uji
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setAudioAktif(!audioAktif)}
+                  title={audioAktif ? "Matikan suara notifikasi" : "Nyalakan suara notifikasi"}
+                  aria-pressed={audioAktif}
+                  className={cn(
+                    "rounded px-1.5 py-0.5 text-[10px] font-bold transition",
+                    audioAktif
+                      ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                      : "bg-neutral-200 text-neutral-600 hover:bg-neutral-300"
+                  )}
+                >
+                  {audioAktif ? "ON" : "OFF"}
+                </button>
+              </div>
+            </div>
+
             <Button
               variant="ghost"
               className="w-full justify-start gap-2.5 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
